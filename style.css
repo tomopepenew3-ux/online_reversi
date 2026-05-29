@@ -1,0 +1,58 @@
+body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #f0f0f0;
+    margin: 0;
+    font-family: sans-serif;
+}
+
+.game-container {
+    text-align: center;
+}
+
+/* 盤面を茶色のプラスチック風に設定 */
+.cell {
+    width: 40px;
+    height: 40px;
+    border: 1px solid #333;
+    display: inline-block;
+    vertical-align: top;
+    background-size: cover;
+}
+#board {
+    width: 336px;
+    height: 336px;
+    background-color: #bb8844;
+    line-height: 0;
+}
+
+/* コマの共通設定（厚みのある正方形クッキーの土台） */
+.piece {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px; /* 角丸のスクエア型 */
+    box-shadow: 0 4px 0 #b38659; /* クッキーの厚みと影 */
+    transition: transform 0.3s;
+    background-size: cover; /* 画像をマスいっぱいに表示 */
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+/* 白猫のコマ（white_toka.png を表示） */
+.piece.white {
+    background-image: url('white_toka.png');
+}
+
+/* 黒猫のコマ（black_toka.png を表示） */
+.piece.black {
+    background-image: url('black_toka.png');
+}
+
+.info {
+    margin-top: 20px;
+    font-size: 20px;
+    font-weight: bold;
+    color: #333;
+}
