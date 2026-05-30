@@ -1,16 +1,51 @@
+// 画面の要素をキープ
 const boardElement = document.getElementById('board');
 const statusElement = document.getElementById('status');
-
-// URLの後ろから部屋名を取得する（例: /1 なら "1"、何もなければ "default"）
-const roomName = window.location.pathname.split('/')[1] || 'default';
 
 // サーバーに接続
 const socket = io();
 
-// 接続が完了したら、サーバーに「この部屋に入ります！」と伝える
-socket.on('connect', () => {
+// URLの後ろから部屋名（ランダム文字列など）を取得
+let roomName = window.location.pathname.split('/')[1];
+
+// HTMLにあるロビーの要素（あとでindex.htmlに足すよ）
+const lobby = document.getElementById('lobby');
+const gameContainer = document.getElementById('game-container');
+const usernameInput = document.getElementById('username');
+const startBtn = document.getElementById('start-btn');
+
+// もしすでにURLに部屋名が入っている（直リンクで来た）なら、ロビーを飛ばしてゲーム画面へ
+if (roomName) {
+    if (lobby) lobby.style.display = 'none';
+    if (gameContainer) gameContainer.style.display = 'block';
+    
+    // サーバーに「この部屋に入ります」と伝える
     socket.emit('joinRoom', roomName);
-});
+}
+
+// 最初の画面で「START！」ボタンを押したときの処理
+if (startBtn) {
+    startBtn.addEventListener('click', () => {
+        const name = usernameInput.value.trim();
+        if (!name) {
+            alert('名前を入れてね！');
+            return;
+        }
+
+        // URLに部屋名がない場合は、ランダムな5文字の部屋名を作る（例: ax39z）
+        if (!roomName) {
+            roomName = Math.random().toString(36).substring(2, 7);
+            // ブラウザのURLを書き換える（ページはリロードされない）
+            window.history.pushState({}, '', `/${roomName}`);
+        }
+
+        if (lobby) lobby.style.display = 'none';
+        if (gameContainer) gameContainer.style.display = 'block';
+
+        // サーバーに部屋への参加を伝える
+        socket.emit('joinRoom', roomName);
+    });
+}
 
 let myColor = null; // サーバーから割り当てられる自分の色
 let gameStarted = false;
