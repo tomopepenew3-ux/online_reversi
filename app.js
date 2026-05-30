@@ -9,18 +9,17 @@ const io = new Server(server);
 
 const port = 3001;
 
-// 静的ファイルの提供
-app.use(express.static(path.join(__dirname, 'public')));
+// 静的ファイルの提供（直下にまとめて置いてある場合）
+app.use(express.static(path.join(__dirname)));
 
-// 【ここを追加！】普通のトップページ（/）にアクセスしたときは最初の画面を出す
+// 普通のトップページ（/）にアクセスしたとき
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// URLの直打ち（例: /1 や /ayw1u）に対応するためのルート設定
-// publicの中に該当するファイルがなければ、index.htmlを返すようにする
+// URLの直打ちに対応するためのルート設定
 app.get('/:room', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // 部屋ごとのプレイヤー管理
