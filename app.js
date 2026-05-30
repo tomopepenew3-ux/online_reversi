@@ -38,12 +38,21 @@ io.on('connection', (socket) => {
         io.emit('updateBoard', data);
     });
 
+        // プレイヤーの接続が切れたときの処理
     socket.on('disconnect', () => {
-        console.log('ユーザーが切断しました:', socket.id);
-        players = players.filter(p => p.id !== socket.id);
-        io.emit('opponentDisconnected', '相手が切断しました。ページをリロードしてやり直してください。');
+        console.log('ユーザーの接続が切れました');
+        try {
+            // サーバーがクラッシュしないように安全に状態をリセット
+            players = {}; 
+            gameState = createInitialBoard();
+            
+            // 全員に通知を送る（リロードを促すメッセージ）
+            io.emit('gameStatus', { message: 'プレイヤーの接続が切れました。リロードして再開してください。' });
+        } catch (error) {
+            console.error('切断処理エラー:', error);
+        }
     });
-});
+
 
 http.listen(port, () => {
     console.log(`Online Server is running on port ${port}`);
