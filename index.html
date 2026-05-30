@@ -4,15 +4,32 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>オンラインリバーシ</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #f0f0f0; }
+        #lobby { margin-top: 50px; }
+        #game-container { display: none; }
+        #board { display: grid; grid-template-columns: repeat(8, 40px); grid-template-rows: repeat(8, 40px); gap: 2px; background: #8B4513; padding: 5px; width: 334px; margin: 20px auto; }
+        .cell { background: #008000; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .stone { width: 34px; height: 34px; border-radius: 50%; display: none; }
+        .black { background: black; display: block; }
+        .white { background: white; display: block; border: 1px solid #ccc; }
+        #status { font-weight: bold; font-size: 1.2rem; margin: 10px; color: #333; }
+    </style>
 </head>
 <body>
-    <div id="game-container">
+
+    <div id="lobby">
         <h2>オンラインリバーシ</h2>
+        <input type="text" id="username" placeholder="名前を入力してね" style="padding: 10px; font-size: 16px;"><br><br>
+        <button id="start-btn" style="padding: 10px 30px; font-size: 20px; font-weight: bold; cursor: pointer; background: #008000; color: white; border: none; border-radius: 5px;">START！</button>
+    </div>
+
+    <div id="game-container">
         <div id="status">サーバーに接続中...</div>
         <div id="board"></div>
     </div>
-    <script src="script.js"></script>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="main.js"></script>
 </body>
 </html>
