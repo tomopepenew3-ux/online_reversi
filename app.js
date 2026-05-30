@@ -6,74 +6,71 @@ const path = require('path');
 
 const PORT = 3001;
 
-// オンラインリバーシのファイルを読み込む設定
+// 静的ファイルの配信設定
 app.use(express.static(__dirname));
 
-// ルーム名付きのURL（例: /abcde）にアクセスされたら、index.html を返す
+// ルーティング設定（ルーム名付きURLへのアクセス処理）
 app.get('/:room', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// 各部屋のプレイヤー情報を管理するオブジェクト
+// ルームごとの接続プレイヤー管理オブジェクト
 const rooms = {};
 
 io.on('connection', (socket) => {
     let currentRoom = null;
 
-    // 部屋に入る合図を受け取ったとき（名前も一緒に届くよ！）
+    // 入室要求時の処理
     socket.on('joinRoom', (data) => {
         const { roomName, userName } = data;
         currentRoom = roomName;
         socket.join(roomName);
 
-        // まだ部屋が存在しなかったら新しく作る
+        // ルームの初期化
         if (!rooms[roomName]) {
             rooms[roomName] = [];
         }
 
-        // 部屋にプレイヤーの名前とIDを登録
+        // プレイヤー情報の格納
         rooms[roomName].push({ id: socket.id, name: userName });
         const playerIndex = rooms[roomName].length;
 
         if (playerIndex === 1) {
-            // 1人目は白猫（2）
+            // 1人目：白猫（先手）を割り当て
             socket.emit('assignColor', 2); 
             socket.emit('waiting', '対戦相手を待っています...');
         } else if (playerIndex === 2) {
-            // 2人目は黒猫（1）
+            // 2人目：黒猫（後手）を割り当て
             socket.emit('assignColor', 1);
 
-            // 1人目（Aさん）と2人目（Bさん）の情報を取得
             const player1 = rooms[roomName][0];
             const player2 = rooms[roomName][1];
 
-            // Aさん（白猫）には、Bさん（黒猫）の名前を教えてゲーム開始！
+            // 双方のクライアントへ対戦相手の名前を通知して開始
             io.to(player1.id).emit('start', { opponentName: player2.name });
-
-            // Bさん（黒猫）には、Aさん（白猫）の名前を教えてゲーム開始！
             io.to(player2.id).emit('start', { opponentName: player1.name });
         } else {
-            // 3人目以降は満員エラー
+            // 3人目以降：満員エラーとして処理
             socket.emit('full', 'この部屋は満員です。');
             socket.leave(roomName);
         }
     });
 
-    // コマが置かれたときの合図
+    // 着手情報のブロードキャスト処理
     socket.on('makeMove', (data) => {
         if (currentRoom) {
             io.to(currentRoom).emit('updateBoard', data);
         }
     });
 
-    // 接続が切れたとき
+    // 切断時の処理
     socket.on('disconnect', () => {
         if (currentRoom && rooms[currentRoom]) {
-            // 抜けた人をリストから削除
+            // 切断されたプレイヤーをリストから除外
             rooms[currentRoom] = rooms[currentRoom].filter(p => p.id !== socket.id);
-            // 残された相手に通知
             io.to(currentRoom).emit('opponentDisconnected', '対戦相手が切断されました。');
             
+            // ルームが空になった場合はオブジェクトから削除
             if (rooms[currentRoom].length === 0) {
                 delete rooms[currentRoom];
             }
