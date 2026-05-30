@@ -162,9 +162,28 @@ socket.on('waiting', (msg) => {
     statusElement.innerText = msg; // ここで「相手を待っています」を表示！
 });
 
+// --- 通信の受け取り処理 ---
+socket.on('assignColor', (color) => {
+    myColor = color;
+});
+
+socket.on('waiting', (msg) => {
+    statusElement.innerText = msg; // 「相手を待っています」を表示
+});
+
+// ⚠️ ここがポイント！ゲーム開始の合図が来たら、盤面データを初期化して描画するよ！
 socket.on('start', (msg) => {
     gameStarted = true;
-    drawBoard();
+    
+    // 盤面を初期状態（白猫と黒猫が2個ずつ真ん中にある状態）にする
+    board = Array(8).fill(null).map(() => Array(8).fill(0));
+    board[3][3] = WHITE_CAT;
+    board[3][4] = BLACK_CAT;
+    board[4][3] = BLACK_CAT;
+    board[4][4] = WHITE_CAT;
+    currentPlayer = WHITE_CAT; // 白猫からスタート
+    
+    drawBoard(); // ここで初めてマス目とコマを描く！
 });
 
 socket.on('updateBoard', (data) => {
@@ -187,4 +206,5 @@ socket.on('opponentDisconnected', (msg) => {
     statusElement.innerText = msg;
 });
 
-updateStatus();
+// 最初の起動時はまだゲームが始まっていないので、描画はしない
+// drawBoard(); はここでは呼ばないよ
