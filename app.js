@@ -14,14 +14,15 @@ app.get('/:room', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// 各部屋のプレイヤーを管理するオブジェクト
+// 各部屋のプレイヤー情報を管理するオブジェクト
 const rooms = {};
 
 io.on('connection', (socket) => {
     let currentRoom = null;
 
-    // 部屋に入る合図を受け取ったとき
-    socket.on('joinRoom', (roomName) => {
+    // 部屋に入る合図を受け取ったとき（名前も一緒に届くよ！）
+    socket.on('joinRoom', (data) => {
+        const { roomName, userName } = data;
         currentRoom = roomName;
         socket.join(roomName);
 
@@ -30,8 +31,8 @@ io.on('connection', (socket) => {
             rooms[roomName] = [];
         }
 
-        // 部屋にプレイヤーを登録
-        rooms[roomName].push(socket.id);
+        // 部屋にプレイヤーの名前とIDを登録
+        rooms[roomName].push({ id: socket.id, name: userName });
         const playerIndex = rooms[roomName].length;
 
         if (playerIndex === 1) {
@@ -41,8 +42,16 @@ io.on('connection', (socket) => {
         } else if (playerIndex === 2) {
             // 2人目は黒猫（1）
             socket.emit('assignColor', 1);
-            // 部屋にいる全員に「ゲーム開始！」の合図を送る
-            io.to(roomName).emit('start', 'ゲーム開始！');
+
+            // 1人目（Aさん）と2人目（Bさん）の情報を取得
+            const player1 = rooms[roomName][0];
+            const player2 = rooms[roomName][1];
+
+            // Aさん（白猫）には、Bさん（黒猫）の名前を教えてゲーム開始！
+            io.to(player1.id).emit('start', { opponentName: player2.name });
+
+            // Bさん（黒猫）には、Aさん（白猫）の名前を教えてゲーム開始！
+            io.to(player2.id).emit('start', { opponentName: player1.name });
         } else {
             // 3人目以降は満員エラー
             socket.emit('full', 'この部屋は満員です。');
@@ -53,7 +62,6 @@ io.on('connection', (socket) => {
     // コマが置かれたときの合図
     socket.on('makeMove', (data) => {
         if (currentRoom) {
-            // 部屋の全員に置かれた位置を伝える
             io.to(currentRoom).emit('updateBoard', data);
         }
     });
@@ -62,11 +70,10 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         if (currentRoom && rooms[currentRoom]) {
             // 抜けた人をリストから削除
-            rooms[currentRoom] = rooms[currentRoom].filter(id => id !== socket.id);
+            rooms[currentRoom] = rooms[currentRoom].filter(p => p.id !== socket.id);
             // 残された相手に通知
             io.to(currentRoom).emit('opponentDisconnected', '対戦相手が切断されました。');
             
-            // 部屋が空っぽになったら消す
             if (rooms[currentRoom].length === 0) {
                 delete rooms[currentRoom];
             }
