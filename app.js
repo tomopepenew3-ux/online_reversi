@@ -1,59 +1,77 @@
 const express = require('express');
-const app = express();
-const http = require('http').createServer(app);
-const io = require('socket.io')(http);
+const http = require('http');
+const { Server } = require('socket.io');
 const path = require('path');
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
 const port = 3001;
 
-app.use(express.static(__dirname));
+// 静的ファイルの提供
+app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+// URLの直打ち（例: /1 や /ayw1u）に対応するためのルート設定
+// publicの中に該当するファイルがなければ、index.htmlを返すようにする
+app.get('/:room', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-let players = []; // 接続しているプレイヤーを保存
+// 部屋ごとのプレイヤー管理
+const rooms = {};
 
 io.on('connection', (socket) => {
     console.log('ユーザーが接続しました:', socket.id);
 
-    // 2人まで順番に色を割り振る
-    if (players.length < 2) {
-        // 1人目を白猫(2)、2人目を黒猫(1)にする（元のコードが白猫スタートのため）
-        const myColor = players.length === 0 ? 2 : 1; 
-        players.push(socket);
-        socket.emit('assignColor', myColor);
+    // 部屋に入る処理
+    socket.on('joinRoom', (roomName) => {
+        if (!roomName) roomName = 'lobby'; // 部屋名がない場合はロビー
         
-        if (players.length === 2) {
-            io.emit('start', '対戦をスタートします！白猫の番です。');
-        } else {
-            socket.emit('waiting', '対戦相手を待っています（1/2）...');
+        socket.join(roomName);
+        socket.currentRoom = roomName;
+
+        if (!rooms[roomName]) {
+            rooms[roomName] = [];
         }
-    } else {
-        socket.emit('full', '満員です。観戦モード、または時間を置いて接続してください。');
-    }
 
-    // 石が置かれた時の処理
-    socket.on('makeMove', (data) => {
-        // 全員に配置データをそのまま送って同期させる
-        io.emit('updateBoard', data);
-    });
+        const roomPlayers = rooms[roomName];
 
-    // プレイヤーの接続が切れたときの処理
-        // プレイヤーの接続が切れたときの処理
-    socket.on('disconnect', () => {
-        console.log('ユーザーの接続が切れました:', socket.id);
-        try {
-            // 切断された socket だけを配列から探して削除する
-            players = players.filter(p => p.id !== socket.id); 
+        if (roomPlayers.length < 2) {
+            // 1人目は黒、2人目は白
+            const color = roomPlayers.length === 0 ? 'black' : 'white';
+            roomPlayers.push({ id: socket.id, color: color });
             
-            // 残された人に「相手が切れたよ」と伝える（お好みでリロードを促す）
-            io.emit('gameStatus', { message: '対戦相手の接続が切れました。相手の再接続を待っています。' });
-        } catch (error) {
-            console.error('切断処理エラー:', error);
+            socket.emit('initColor', color);
+            console.log(`部屋 [${roomName}] にプレイヤー登録:`, color);
+
+            if (roomPlayers.length === 2) {
+                io.to(roomName).emit('gameStatus', { message: '対戦スタート！' });
+            } else {
+                io.to(roomName).emit('gameStatus', { message: '対戦相手を待っています... (1/2)' });
+            }
+        } else {
+            // 3人目以降は観戦
+            socket.emit('initColor', 'spectator');
+            socket.emit('gameStatus', { message: '満員のため観戦モードです' });
         }
     });
-}); // ←ここが足りなかった閉じカッコだよ！
 
-http.listen(port, () => {
+    socket.on('disconnect', () => {
+        const roomName = socket.currentRoom;
+        console.log('ユーザーの接続が切れました:', socket.id);
+        
+        if (roomName && rooms[roomName]) {
+            rooms[roomName] = rooms[roomName].filter(p => p.id !== socket.id);
+            if (rooms[roomName].length === 0) {
+                delete rooms[roomName];
+            } else {
+                io.to(roomName).emit('gameStatus', { message: '対戦相手の接続が切れました。相手の再接続を待っています。' });
+            }
+        }
+    });
+});
+
+server.listen(port, () => {
     console.log(`Online Server is running on port ${port}`);
 });
