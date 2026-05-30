@@ -18,11 +18,7 @@ const WHITE_CAT = 2;
 
 const roomName = window.location.pathname.split('/')[1];
 
-if (roomName) {
-    lobbyElement.style.display = 'block';
-    gameContainer.style.display = 'none';
-}
-
+// 開始ボタンのクリックイベント
 startBtn.addEventListener('click', () => {
     myName = usernameInput.value.trim();
     if (!myName) {
@@ -30,6 +26,7 @@ startBtn.addEventListener('click', () => {
         return;
     }
 
+    // ボタンを押した瞬間にロビーを隠して待機画面へ移行
     lobbyElement.style.display = 'none';
     gameContainer.style.display = 'block';
 
@@ -50,18 +47,22 @@ socket.on('waiting', (msg) => {
     statusElement.innerText = msg;
 });
 
-// ゲーム開始処理（サーバーから初期盤面を受け取る）
+// ゲーム開始通知を受信したときの処理
 socket.on('start', (data) => {
     gameStarted = true;
     opponentName = data.opponentName;
     board = data.board;
     currentPlayer = data.currentPlayer;
     
+    // 確実にゲーム画面の表示構成を整える
+    lobbyElement.style.display = 'none';
+    gameContainer.style.display = 'block';
+    
     drawBoard();
     updateStatus();
 });
 
-// 表示文字列の更新
+// 手番と枚数の表示更新
 function updateStatus() {
     if (!gameStarted) return;
 
@@ -71,7 +72,6 @@ function updateStatus() {
     let whiteCount = board.flat().filter(v => v === WHITE_CAT).length;
     let blackCount = board.flat().filter(v => v === BLACK_CAT).length;
 
-    // 手番表記の指定に修正
     let turnText = "";
     if (currentPlayer === myColor) {
         turnText = "あなたの番です 🐟🐈";
@@ -90,11 +90,9 @@ function handleCellClick(row, col) {
     if (!gameStarted || currentPlayer !== myColor) return;
     if (board[row][col] !== 0) return;
 
-    // サーバーに着手位置を送信
     socket.emit('makeMove', { row, col, color: myColor });
 }
 
-// サーバー側で計算された「最新のゲーム状態」を一括受信して同期
 socket.on('updateGameState', (data) => {
     board = data.board;
     currentPlayer = data.currentPlayer;
