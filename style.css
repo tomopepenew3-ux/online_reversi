@@ -1,3 +1,4 @@
+/* 全体レイアウトの設定 */
 body {
     display: flex;
     justify-content: center;
@@ -12,44 +13,53 @@ body {
     text-align: center;
 }
 
-/* 盤面を茶色のプラスチック風に設定 */
-.cell {
-    width: 40px;
-    height: 40px;
-    border: 1px solid #333;
-    display: inline-block;
-    vertical-align: top;
-    background-size: cover;
-}
+/* 盤面の設定（8x8のグリッドレイアウト） */
 #board {
-    width: 336px;
-    height: 336px;
-    background-color: #bb8844;
-    line-height: 0;
+    width: 320px;
+    height: 320px;
+    background-color: #8B4513; /* 外枠の茶色 */
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    gap: 2px;
+    padding: 2px;
+    margin: 20px auto;
+    border: 4px solid #5c2d0c;
+    border-radius: 10px;
+    display: grid; 
 }
 
-/* コマの共通設定（厚みのある正方形クッキーの土台） */
+/* 各マスの設定 */
+.cell {
+    background-color: #CD853F; /* マスの薄い茶色 */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+}
+
+/* 駒の共通設定（角丸と立体感の装飾） */
 .piece {
-    width: 48px;
-    height: 48px;
-    border-radius: 8px; /* 角丸のスクエア型 */
-    box-shadow: 0 4px 0 #b38659; /* クッキーの厚みと影 */
+    width: 90%;
+    height: 90%;
+    border-radius: 8px; /* 角丸設定 */
+    box-shadow: 0 4px 0 #b38659; /* クッキーの厚み表現 */
     transition: transform 0.3s;
-    background-size: cover; /* 画像をマスいっぱいに表示 */
+    background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
 }
 
-/* 白猫のコマ（white_toka.png を表示） */
+/* 白猫の駒（画像の割り当て） */
 .piece.white {
     background-image: url('white_toka.png');
 }
 
-/* 黒猫のコマ（black_toka.png を表示） */
+/* 黒猫の駒（画像の割り当て） */
 .piece.black {
     background-image: url('black_toka.png');
 }
 
+/* 情報表示エリアの設定 */
 .info {
     margin-top: 20px;
     font-size: 20px;
