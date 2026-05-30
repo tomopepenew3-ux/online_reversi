@@ -1,81 +1,79 @@
 const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
+const app = express();
+const http = require('http').createServer(app);
+const io = require('socket.io')(http);
 const path = require('path');
 
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
+const PORT = 3001;
 
-const port = 3001;
+// オンラインリバーシのファイルを読み込む設定
+app.use(express.static(__dirname));
 
-// 静的ファイルの提供（直下にまとめて置いてある場合）
-app.use(express.static(path.join(__dirname)));
-
-// 普通のトップページ（/）にアクセスしたとき
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-// URLの直打ちに対応するためのルート設定
+// ルーム名付きのURL（例: /abcde）にアクセスされたら、index.html を返す
 app.get('/:room', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// 部屋ごとのプレイヤー管理
+// 各部屋のプレイヤーを管理するオブジェクト
 const rooms = {};
 
 io.on('connection', (socket) => {
-    console.log('ユーザーが接続しました:', socket.id);
+    let currentRoom = null;
 
-    // 部屋に入る処理
+    // 部屋に入る合図を受け取ったとき
     socket.on('joinRoom', (roomName) => {
-        if (!roomName) roomName = 'lobby'; // 部屋名がない場合はロビー
-        
+        currentRoom = roomName;
         socket.join(roomName);
-        socket.currentRoom = roomName;
 
+        // まだ部屋が存在しなかったら新しく作る
         if (!rooms[roomName]) {
             rooms[roomName] = [];
         }
 
-        const roomPlayers = rooms[roomName];
+        // 部屋にプレイヤーを登録
+        rooms[roomName].push(socket.id);
+        const playerIndex = rooms[roomName].length;
 
-        if (roomPlayers.length < 2) {
-            // 1人目は黒、2人目は白
-            const color = roomPlayers.length === 0 ? 'black' : 'white';
-            roomPlayers.push({ id: socket.id, color: color });
-            
-            socket.emit('initColor', color);
-            console.log(`部屋 [${roomName}] にプレイヤー登録:`, color);
-
-            if (roomPlayers.length === 2) {
-                io.to(roomName).emit('gameStatus', { message: '対戦スタート！' });
-            } else {
-                io.to(roomName).emit('gameStatus', { message: '対戦相手を待っています... (1/2)' });
-            }
+        if (playerIndex === 1) {
+            // 1人目は白猫（2）
+            socket.emit('assignColor', 2); 
+            socket.emit('waiting', '対戦相手を待っています...');
+        } else if (playerIndex === 2) {
+            // 2人目は黒猫（1）
+            socket.emit('assignColor', 1);
+            // 部屋にいる全員に「ゲーム開始！」の合図を送る
+            io.to(roomName).emit('start', 'ゲーム開始！');
         } else {
-            // 3人目以降は観戦
-            socket.emit('initColor', 'spectator');
-            socket.emit('gameStatus', { message: '満員のため観戦モードです' });
+            // 3人目以降は満員エラー
+            socket.emit('full', 'この部屋は満員です。');
+            socket.leave(roomName);
         }
     });
 
+    // コマが置かれたときの合図
+    socket.on('makeMove', (data) => {
+        if (currentRoom) {
+            // 部屋の全員に置かれた位置を伝える
+            io.to(currentRoom).emit('updateBoard', data);
+        }
+    });
+
+    // 接続が切れたとき
     socket.on('disconnect', () => {
-        const roomName = socket.currentRoom;
-        console.log('ユーザーの接続が切れました:', socket.id);
-        
-        if (roomName && rooms[roomName]) {
-            rooms[roomName] = rooms[roomName].filter(p => p.id !== socket.id);
-            if (rooms[roomName].length === 0) {
-                delete rooms[roomName];
-            } else {
-                io.to(roomName).emit('gameStatus', { message: '対戦相手の接続が切れました。相手の再接続を待っています。' });
+        if (currentRoom && rooms[currentRoom]) {
+            // 抜けた人をリストから削除
+            rooms[currentRoom] = rooms[currentRoom].filter(id => id !== socket.id);
+            // 残された相手に通知
+            io.to(currentRoom).emit('opponentDisconnected', '対戦相手が切断されました。');
+            
+            // 部屋が空っぽになったら消す
+            if (rooms[currentRoom].length === 0) {
+                delete rooms[currentRoom];
             }
         }
     });
 });
 
-server.listen(port, () => {
-    console.log(`Online Server is running on port ${port}`);
+http.listen(PORT, () => {
+    console.log(`Online Server is running on port ${PORT}`);
 });
