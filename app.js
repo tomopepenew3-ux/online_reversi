@@ -38,13 +38,12 @@ io.on('connection', (socket) => {
         io.emit('updateBoard', data);
     });
 
-        // プレイヤーの接続が切れたときの処理
+    // プレイヤーの接続が切れたときの処理
     socket.on('disconnect', () => {
         console.log('ユーザーの接続が切れました');
         try {
-            // サーバーがクラッシュしないように安全に状態をリセット
-            players = {}; 
-            gameState = createInitialBoard();
+            // サーバーがクラッシュしないように配列を空にする
+            players = []; 
             
             // 全員に通知を送る（リロードを促すメッセージ）
             io.emit('gameStatus', { message: 'プレイヤーの接続が切れました。リロードして再開してください。' });
@@ -52,7 +51,7 @@ io.on('connection', (socket) => {
             console.error('切断処理エラー:', error);
         }
     });
-
+}); // ←ここが足りなかった閉じカッコだよ！
 
 http.listen(port, () => {
     console.log(`Online Server is running on port ${port}`);
