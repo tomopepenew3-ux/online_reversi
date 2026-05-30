@@ -39,14 +39,15 @@ io.on('connection', (socket) => {
     });
 
     // プレイヤーの接続が切れたときの処理
+        // プレイヤーの接続が切れたときの処理
     socket.on('disconnect', () => {
-        console.log('ユーザーの接続が切れました');
+        console.log('ユーザーの接続が切れました:', socket.id);
         try {
-            // サーバーがクラッシュしないように配列を空にする
-            players = []; 
+            // 切断された socket だけを配列から探して削除する
+            players = players.filter(p => p.id !== socket.id); 
             
-            // 全員に通知を送る（リロードを促すメッセージ）
-            io.emit('gameStatus', { message: 'プレイヤーの接続が切れました。リロードして再開してください。' });
+            // 残された人に「相手が切れたよ」と伝える（お好みでリロードを促す）
+            io.emit('gameStatus', { message: '対戦相手の接続が切れました。相手の再接続を待っています。' });
         } catch (error) {
             console.error('切断処理エラー:', error);
         }
