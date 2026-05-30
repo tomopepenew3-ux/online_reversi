@@ -1,8 +1,17 @@
 const boardElement = document.getElementById('board');
 const statusElement = document.getElementById('status');
 
-// Socket.ioの初期化
+// URLの後ろから部屋名を取得する（例: /1 なら "1"、何もなければ "default"）
+const roomName = window.location.pathname.split('/')[1] || 'default';
+
+// サーバーに接続
 const socket = io();
+
+// 接続が完了したら、サーバーに「この部屋に入ります！」と伝える
+socket.on('connect', () => {
+    socket.emit('joinRoom', roomName);
+});
+
 let myColor = null; // サーバーから割り当てられる自分の色
 let gameStarted = false;
 
