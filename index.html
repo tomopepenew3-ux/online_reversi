@@ -4,57 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ねこねこリバーシ</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            background-color: #f0f0f0;
-        }
-        #lobby {
-            margin-top: 50px;
-        }
-        #game-container {
-            display: none; /* 最初は隠しておく */
-        }
-        #board {
-            width: 320px;
-            height: 320px;
-            grid-template-columns: repeat(8, 1fr);
-            grid-template-rows: repeat(8, 1fr);
-            background-color: #8B4513; /* クッキーの茶色 */
-            gap: 2px;
-            padding: 2px;
-            margin: 20px auto;
-            border: 4px solid #5c2d0c;
-            border-radius: 10px;
-            display: grid;
-        }
-        .cell {
-            background-color: #CD853F; /* 薄い茶色 */
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: pointer;
-        }
-        .piece {
-            width: 80%;
-            height: 80%;
-            border-radius: 50%;
-        }
-        .black { background-color: #000000; }
-        .white { background-color: #ffffff; }
-        #status {
-            font-size: 18px;
-            font-weight: bold;
-            margin: 20px;
-            min-height: 50px;
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <div id="lobby">
-        <h2>オンラインリバーシ</h2>
+    <div id="lobby" style="margin-top: 50px; text-align: center;">
+        <h2>ねこねこリバーシ</h2>
         <input type="text" id="username" placeholder="名前を入力してね" style="padding: 10px; font-size: 16px;"><br><br>
         <button id="start-btn" style="padding: 10px 30px; font-size: 20px; font-weight: bold; cursor: pointer; background: #008000; color: white; border: none; border-radius: 5px;">START！</button>
     </div>
