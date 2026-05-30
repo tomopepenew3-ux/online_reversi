@@ -6,72 +6,127 @@ const path = require('path');
 
 const PORT = 3001;
 
-// 静的ファイルの配信設定
 app.use(express.static(__dirname));
 
-// ルーティング設定（ルーム名付きURLへのアクセス処理）
 app.get('/:room', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// ルームごとの接続プレイヤー管理オブジェクト
+// ルームごとのゲーム状態を管理するオブジェクト
 const rooms = {};
+
+// リバーシの挟んでひっくり返すロジック（サーバー側で一括管理）
+function getFlippedPieces(board, row, col, color) {
+    if (board[row][col] !== 0) return [];
+    
+    const opponent = color === 1 ? 2 : 1;
+    const directions = [
+        [-1, -1], [-1, 0], [-1, 1],
+        [0, -1],           [0, 1],
+        [1, -1],  [1, 0],  [1, 1]
+    ];
+    let piecesToFlip = [];
+
+    for (const [dr, dc] of directions) {
+        let r = row + dr;
+        let c = col + dc;
+        let temp = [];
+
+        while (r >= 0 && r < 8 && c >= 0 && c < 8 && board[r][c] === opponent) {
+            temp.push([r, c]);
+            r += dr;
+            c += dc;
+        }
+
+        if (r >= 0 && r < 8 && c >= 0 && c < 8 && board[r][c] === color) {
+            piecesToFlip = piecesToFlip.concat(temp);
+        }
+    }
+    return piecesToFlip;
+}
 
 io.on('connection', (socket) => {
     let currentRoom = null;
 
-    // 入室要求時の処理
     socket.on('joinRoom', (data) => {
         const { roomName, userName } = data;
         currentRoom = roomName;
         socket.join(roomName);
 
-        // ルームの初期化
         if (!rooms[roomName]) {
-            rooms[roomName] = [];
+            // 新規ルームの初期化（盤面、プレイヤーリスト、手番の管理）
+            rooms[roomName] = {
+                players: [],
+                board: Array(8).fill(null).map(() => Array(8).fill(0)),
+                currentPlayer: 2 // 先手: 白猫(2)
+            };
+            // 初期4マスの配置
+            rooms[roomName].board[3][3] = 2;
+            rooms[roomName].board[3][4] = 1;
+            rooms[roomName].board[4][3] = 1;
+            rooms[roomName].board[4][4] = 2;
         }
 
-        // プレイヤー情報の格納
-        rooms[roomName].push({ id: socket.id, name: userName });
-        const playerIndex = rooms[roomName].length;
+        const room = rooms[roomName];
+        room.players.push({ id: socket.id, name: userName });
+        const playerIndex = room.players.length;
 
         if (playerIndex === 1) {
-            // 1人目：白猫（先手）を割り当て
-            socket.emit('assignColor', 2); 
-            socket.emit('waiting', '対戦相手を待っています...');
+            socket.emit('assignColor', 2); // 1人目: 白猫
+            socket.emit('waiting', '対戦相手を待っています...🐾🐾');
         } else if (playerIndex === 2) {
-            // 2人目：黒猫（後手）を割り当て
-            socket.emit('assignColor', 1);
+            socket.emit('assignColor', 1); // 2人目: 黒猫
 
-            const player1 = rooms[roomName][0];
-            const player2 = rooms[roomName][1];
+            const player1 = room.players[0];
+            const player2 = room.players[1];
 
-            // 双方のクライアントへ対戦相手の名前を通知して開始
-            io.to(player1.id).emit('start', { opponentName: player2.name });
-            io.to(player2.id).emit('start', { opponentName: player1.name });
+            // ゲーム開始時、初期盤面とそれぞれの対戦相手名を送信
+            io.to(player1.id).emit('start', { opponentName: player2.name, board: room.board, currentPlayer: room.currentPlayer });
+            io.to(player2.id).emit('start', { opponentName: player1.name, board: room.board, currentPlayer: room.currentPlayer });
         } else {
-            // 3人目以降：満員エラーとして処理
             socket.emit('full', 'この部屋は満員です。');
             socket.leave(roomName);
         }
     });
 
-    // 着手情報のブロードキャスト処理
+    // コマが置かれたときの処理
     socket.on('makeMove', (data) => {
-        if (currentRoom) {
-            io.to(currentRoom).emit('updateBoard', data);
+        const room = rooms[currentRoom];
+        if (!room) return;
+
+        const { row, col, color } = data;
+
+        // 手番チェック
+        if (room.currentPlayer !== color) return;
+
+        // ひっくり返せるコマを取得
+        const flipped = getFlippedPieces(room.board, row, col, color);
+        
+        // どこもひっくり返せない場所には置けないルール
+        if (flipped.length === 0) return;
+
+        // 盤面の更新
+        room.board[row][col] = color;
+        for (const [fr, fc] of flipped) {
+            room.board[fr][fc] = color;
         }
+
+        // 手番の交代
+        room.currentPlayer = room.currentPlayer === 2 ? 1 : 2;
+
+        // 参加者全員に「最新の盤面状態」と「次の手番」を一斉送信（同期ズレを完全に防止）
+        io.to(currentRoom).emit('updateGameState', {
+            board: room.board,
+            currentPlayer: room.currentPlayer
+        });
     });
 
-    // 切断時の処理
     socket.on('disconnect', () => {
         if (currentRoom && rooms[currentRoom]) {
-            // 切断されたプレイヤーをリストから除外
-            rooms[currentRoom] = rooms[currentRoom].filter(p => p.id !== socket.id);
+            rooms[currentRoom].players = rooms[currentRoom].players.filter(p => p.id !== socket.id);
             io.to(currentRoom).emit('opponentDisconnected', '対戦相手が切断されました。');
             
-            // ルームが空になった場合はオブジェクトから削除
-            if (rooms[currentRoom].length === 0) {
+            if (rooms[currentRoom].players.length === 0) {
                 delete rooms[currentRoom];
             }
         }
