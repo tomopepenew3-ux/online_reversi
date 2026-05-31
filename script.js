@@ -18,7 +18,6 @@ const WHITE_CAT = 2;
 
 const roomName = window.location.pathname.split('/')[1];
 
-// 開始ボタンのクリックイベント
 startBtn.addEventListener('click', () => {
     myName = usernameInput.value.trim();
     if (!myName) {
@@ -26,7 +25,6 @@ startBtn.addEventListener('click', () => {
         return;
     }
 
-    // ボタンを押した瞬間にロビーを隠して待機画面へ移行
     lobbyElement.style.display = 'none';
     gameContainer.style.display = 'block';
 
@@ -47,14 +45,12 @@ socket.on('waiting', (msg) => {
     statusElement.innerText = msg;
 });
 
-// ゲーム開始通知を受信したときの処理
 socket.on('start', (data) => {
     gameStarted = true;
     opponentName = data.opponentName;
     board = data.board;
     currentPlayer = data.currentPlayer;
     
-    // 確実にゲーム画面の表示構成を整える
     lobbyElement.style.display = 'none';
     gameContainer.style.display = 'block';
     
@@ -62,8 +58,7 @@ socket.on('start', (data) => {
     updateStatus();
 });
 
-// 手番と枚数の表示更新
-function updateStatus() {
+function updateStatus(customTurnText = null) {
     if (!gameStarted) return;
 
     const myColorText = myColor === WHITE_CAT ? "白猫" : "黒猫";
@@ -73,7 +68,9 @@ function updateStatus() {
     let blackCount = board.flat().filter(v => v === BLACK_CAT).length;
 
     let turnText = "";
-    if (currentPlayer === myColor) {
+    if (customTurnText) {
+        turnText = customTurnText;
+    } else if (currentPlayer === myColor) {
         turnText = "あなたの番です 🐟🐈";
     } else {
         turnText = `${opponentName} の番です（相手の番）`;
@@ -93,17 +90,38 @@ function handleCellClick(row, col) {
     socket.emit('makeMove', { row, col, color: myColor });
 }
 
+// 通常の盤面更新（パス通知の処理を追加）
 socket.on('updateGameState', (data) => {
     board = data.board;
     currentPlayer = data.currentPlayer;
     drawBoard();
     updateStatus();
+
+    // パスが発生した場合は画面にアラートを出す
+    if (data.passMessage) {
+        setTimeout(() => { alert(data.passMessage); }, 100);
+    }
+});
+
+// ゲーム終了の通知受信
+socket.on('gameOver', (data) => {
+    board = data.board;
+    drawBoard();
+    // ステータス画面のテキストを勝敗結果に書き換える
+    updateStatus(`<span style="color: #ff0000; font-size: 20px;">${data.winnerMessage}</span>`);
+    setTimeout(() => { alert(`ゲーム終了！\n${data.winnerMessage}`); }, 200);
+});
+
+// 相手が切断したときの処理
+socket.on('opponentDisconnected', (msg) => {
+    alert(msg);
+    location.reload(); // 画面をリロードしてロビーに戻す
 });
 
 function drawBoard() {
     boardElement.innerHTML = '';
     for (let r = 0; r < 8; r++) {
-        for (let c = 0; c < 8; c++) {
+        for (let c = 0; c < 8; c++) { // ここを正しく c++ に直したよ！
             const cell = document.createElement('div');
             cell.className = 'cell';
             cell.addEventListener('click', () => handleCellClick(r, c));
