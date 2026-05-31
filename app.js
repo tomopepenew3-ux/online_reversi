@@ -12,10 +12,9 @@ app.get('/:room', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// ルームごとのゲーム状態を管理するオブジェクト
 const rooms = {};
 
-// リバーシの挟んでひっくり返すロジック（サーバー側で一括管理）
+// 挟んでひっくり返せるコマの座標リストを取得する関数
 function getFlippedPieces(board, row, col, color) {
     if (board[row][col] !== 0) return [];
     
@@ -45,6 +44,19 @@ function getFlippedPieces(board, row, col, color) {
     return piecesToFlip;
 }
 
+// その色のプレイヤーが「盤面のどこかに1箇所でも置ける場所があるか」を調べる関数
+function hasValidMoves(board, color) {
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            if (board[r][c] === 0) {
+                const flipped = getFlippedPieces(board, r, c, color);
+                if (flipped.length > 0) return true;
+            }
+        }
+    }
+    return false;
+}
+
 io.on('connection', (socket) => {
     let currentRoom = null;
 
@@ -54,13 +66,12 @@ io.on('connection', (socket) => {
         socket.join(roomName);
 
         if (!rooms[roomName]) {
-            // 新規ルームの初期化（盤面、プレイヤーリスト、手番の管理）
             rooms[roomName] = {
                 players: [],
                 board: Array(8).fill(null).map(() => Array(8).fill(0)),
-                currentPlayer: 2 // 先手: 白猫(2)
+                currentPlayer: 2, // 先手: 白猫(2)
+                gameFinished: false
             };
-            // 初期4マスの配置
             rooms[roomName].board[3][3] = 2;
             rooms[roomName].board[3][4] = 1;
             rooms[roomName].board[4][3] = 1;
@@ -72,15 +83,14 @@ io.on('connection', (socket) => {
         const playerIndex = room.players.length;
 
         if (playerIndex === 1) {
-            socket.emit('assignColor', 2); // 1人目: 白猫
+            socket.emit('assignColor', 2); // 白猫
             socket.emit('waiting', '対戦相手を待っています...🐾🐾');
         } else if (playerIndex === 2) {
-            socket.emit('assignColor', 1); // 2人目: 黒猫
+            socket.emit('assignColor', 1); // 黒猫
 
             const player1 = room.players[0];
             const player2 = room.players[1];
 
-            // ゲーム開始時、初期盤面とそれぞれの対戦相手名を送信
             io.to(player1.id).emit('start', { opponentName: player2.name, board: room.board, currentPlayer: room.currentPlayer });
             io.to(player2.id).emit('start', { opponentName: player1.name, board: room.board, currentPlayer: room.currentPlayer });
         } else {
@@ -89,46 +99,75 @@ io.on('connection', (socket) => {
         }
     });
 
-    // コマが置かれたときの処理
     socket.on('makeMove', (data) => {
         const room = rooms[currentRoom];
-        if (!room) return;
+        if (!room || room.gameFinished) return;
 
         const { row, col, color } = data;
 
-        // 手番チェック
         if (room.currentPlayer !== color) return;
 
-        // ひっくり返せるコマを取得
         const flipped = getFlippedPieces(room.board, row, col, color);
-        
-        // どこもひっくり返せない場所には置けないルール
         if (flipped.length === 0) return;
 
-        // 盤面の更新
+        // 盤面更新
         room.board[row][col] = color;
         for (const [fr, fc] of flipped) {
             room.board[fr][fc] = color;
         }
 
-        // 手番の交代
-        room.currentPlayer = room.currentPlayer === 2 ? 1 : 2;
+        // 次の手番を決定するロジック（パス判定）
+        const nextColor = room.currentPlayer === 2 ? 1 : 2;
+        
+        if (hasValidMoves(room.board, nextColor)) {
+            // 通常通り相手の番
+            room.currentPlayer = nextColor;
+            io.to(currentRoom).emit('updateGameState', {
+                board: room.board,
+                currentPlayer: room.currentPlayer,
+                passMessage: null
+            });
+        } else if (hasValidMoves(room.board, room.currentPlayer)) {
+            // 相手が打てないので、自分が連続で打つ（パス発生）
+            const passTargetName = nextColor === 2 ? "白猫" : "黒猫";
+            io.to(currentRoom).emit('updateGameState', {
+                board: room.board,
+                currentPlayer: room.currentPlayer,
+                passMessage: `${passTargetName} は置ける場所がないためパスします🐾`
+            });
+        } else {
+            // 2人とも置けない、または盤面が埋まったのでゲーム終了
+            room.gameFinished = true;
+            
+            let whiteCount = room.board.flat().filter(v => v === 2).length;
+            let blackCount = room.board.flat().filter(v => v === 1).length;
+            let winnerMessage = "";
 
-        // 参加者全員に「最新の盤面状態」と「次の手番」を一斉送信（同期ズレを完全に防止）
-        io.to(currentRoom).emit('updateGameState', {
-            board: room.board,
-            currentPlayer: room.currentPlayer
-        });
+            if (whiteCount > blackCount) {
+                const winnerName = room.players[0] ? room.players[0].name : "白猫";
+                winnerMessage = `🏆 白猫の ${winnerName} の勝ち！🏅`;
+            } else if (blackCount > whiteCount) {
+                const winnerName = room.players[1] ? room.players[1].name : "黒猫";
+                winnerMessage = `🏆 黒猫の ${winnerName} の勝ち！🏅`;
+            } else {
+                winnerMessage = "引き分けです！ 🐾🐈🐾";
+            }
+
+            io.to(currentRoom).emit('gameOver', {
+                board: room.board,
+                winnerMessage: winnerMessage
+            });
+        }
     });
 
+    // 誰かが切断されたら、部屋データを完全に削除して次回の入室エラーを防ぐ
     socket.on('disconnect', () => {
         if (currentRoom && rooms[currentRoom]) {
             rooms[currentRoom].players = rooms[currentRoom].players.filter(p => p.id !== socket.id);
             io.to(currentRoom).emit('opponentDisconnected', '対戦相手が切断されました。');
             
-            if (rooms[currentRoom].players.length === 0) {
-                delete rooms[currentRoom];
-            }
+            // 部屋を完全にリセット・削除
+            delete rooms[currentRoom];
         }
     });
 });
